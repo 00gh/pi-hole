@@ -34,8 +34,12 @@ function get_local_branch() {
 function get_local_version() {
     # Return active branch
     cd "${1}" 2> /dev/null || return 1
-    git describe --long --dirty --tags || return 1
+    git describe --long --dirty --tags 2> /dev/null || return 1
 }
+
+# Source the setupvars config file
+# shellcheck disable=SC1091
+. /etc/pihole/setupVars.conf
 
 if [[ "$2" == "remote" ]]; then
 
@@ -43,24 +47,48 @@ if [[ "$2" == "remote" ]]; then
         sleep 30
     fi
 
-    GITHUB_CORE_VERSION="$(json_extract tag_name "$(curl -q 'https://api.github.com/repos/pi-hole/pi-hole/releases/latest' 2> /dev/null)")"
-    GITHUB_WEB_VERSION="$(json_extract tag_name "$(curl -q 'https://api.github.com/repos/pi-hole/AdminLTE/releases/latest' 2> /dev/null)")"
-    GITHUB_FTL_VERSION="$(json_extract tag_name "$(curl -q 'https://api.github.com/repos/pi-hole/FTL/releases/latest' 2> /dev/null)")"
+    GITHUB_VERSION_FILE="/etc/pihole/GitHubVersions"
 
-    echo -n "${GITHUB_CORE_VERSION} ${GITHUB_WEB_VERSION} ${GITHUB_FTL_VERSION}" > "/etc/pihole/GitHubVersions"
+    GITHUB_CORE_VERSION="$(json_extract tag_name "$(curl -s 'https://api.github.com/repos/pi-hole/pi-hole/releases/latest' 2> /dev/null)")"
+    echo -n "${GITHUB_CORE_VERSION}" > "${GITHUB_VERSION_FILE}"
+    chmod 644 "${GITHUB_VERSION_FILE}"
+
+    if [[ "${INSTALL_WEB_INTERFACE}" == true ]]; then
+        GITHUB_WEB_VERSION="$(json_extract tag_name "$(curl -s 'https://api.github.com/repos/pi-hole/AdminLTE/releases/latest' 2> /dev/null)")"
+        echo -n " ${GITHUB_WEB_VERSION}" >> "${GITHUB_VERSION_FILE}"
+    fi
+
+    GITHUB_FTL_VERSION="$(json_extract tag_name "$(curl -s 'https://api.github.com/repos/pi-hole/FTL/releases/latest' 2> /dev/null)")"
+    echo -n " ${GITHUB_FTL_VERSION}" >> "${GITHUB_VERSION_FILE}"
 
 else
 
-    CORE_BRANCH="$(get_local_branch /etc/.pihole)"
-    WEB_BRANCH="$(get_local_branch /var/www/html/admin)"
-    FTL_BRANCH="$(pihole-FTL branch)"
+    LOCAL_BRANCH_FILE="/etc/pihole/localbranches"
 
-    echo -n "${CORE_BRANCH} ${WEB_BRANCH} ${FTL_BRANCH}" > "/etc/pihole/localbranches"
+    CORE_BRANCH="$(get_local_branch /etc/.pihole)"
+    echo -n "${CORE_BRANCH}" > "${LOCAL_BRANCH_FILE}"
+    chmod 644 "${LOCAL_BRANCH_FILE}"
+
+    if [[ "${INSTALL_WEB_INTERFACE}" == true ]]; then
+        WEB_BRANCH="$(get_local_branch /var/www/html/admin)"
+        echo -n " ${WEB_BRANCH}" >> "${LOCAL_BRANCH_FILE}"
+    fi
+
+    FTL_BRANCH="$(pihole-FTL branch)"
+    echo -n " ${FTL_BRANCH}" >> "${LOCAL_BRANCH_FILE}"
+
+    LOCAL_VERSION_FILE="/etc/pihole/localversions"
 
     CORE_VERSION="$(get_local_version /etc/.pihole)"
-    WEB_VERSION="$(get_local_version /var/www/html/admin)"
-    FTL_VERSION="$(pihole-FTL version)"
+    echo -n "${CORE_VERSION}" > "${LOCAL_VERSION_FILE}"
+    chmod 644 "${LOCAL_VERSION_FILE}"
 
-    echo -n "${CORE_VERSION} ${WEB_VERSION} ${FTL_VERSION}" > "/etc/pihole/localversions"
+    if [[ "${INSTALL_WEB_INTERFACE}" == true ]]; then
+        WEB_VERSION="$(get_local_version /var/www/html/admin)"
+        echo -n " ${WEB_VERSION}" >> "${LOCAL_VERSION_FILE}"
+    fi
+
+    FTL_VERSION="$(pihole-FTL version)"
+    echo -n " ${FTL_VERSION}" >> "${LOCAL_VERSION_FILE}"
 
 fi

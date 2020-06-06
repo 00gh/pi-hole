@@ -8,6 +8,7 @@
 #
 # This file is copyright under the latest version of the EUPL.
 # Please see LICENSE file for your rights under this license.
+LC_ALL=C
 LC_NUMERIC=C
 
 # Retrieve stats from FTL engine
@@ -243,7 +244,7 @@ get_sys_stats() {
         disk_total="${disk_raw[1]}"
         disk_perc="${disk_raw[2]}"
 
-        net_gateway=$(route -n | awk '$4 == "UG" {print $2;exit}')
+        net_gateway=$(ip route | grep default | cut -d ' ' -f 3 | head -n 1)
 
         # Get DHCP stats, if feature is enabled
         if [[ "$DHCP_ACTIVE" == "true" ]]; then
@@ -443,6 +444,9 @@ get_strings() {
 }
 
 chronoFunc() {
+    local extra_arg="$1"
+    local extra_value="$2"
+
     get_init_stats
 
     for (( ; ; )); do
@@ -460,10 +464,8 @@ chronoFunc() {
         fi
 
         # Get refresh number
-        if [[ "$*" == *"-r"* ]]; then
-            num="$*"
-            num="${num/*-r /}"
-            num="${num/ */}"
+        if [[ "${extra_arg}" = "refresh" ]]; then
+            num="${extra_value}"
             num_str="Refresh set for every $num seconds"
         else
             num_str=""
@@ -472,13 +474,13 @@ chronoFunc() {
         clear
 
         # Remove exit message heading on third refresh
-        if [[ "$count" -le 2 ]] && [[ "$*" != *"-e"* ]]; then
+        if [[ "$count" -le 2 ]] && [[ "${extra_arg}" != "exit" ]]; then
             echo -e " ${COL_LIGHT_GREEN}Pi-hole Chronometer${COL_NC}
             $num_str
             ${COL_LIGHT_RED}Press Ctrl-C to exit${COL_NC}
             ${COL_DARK_GRAY}$scr_line_str${COL_NC}"
         else
-        echo -e "[0;1;31;91m|¯[0;1;33;93m¯[0;1;32;92m¯[0;1;32;92m(¯[0;1;36;96m)[0;1;34;94m_[0;1;35;95m|[0;1;33;93m¯[0;1;31;91m|_  [0;1;32;92m__[0;1;36;96m_|[0;1;31;91m¯[0;1;34;94m|[0;1;35;95m__[0;1;31;91m_[0m$phc_ver_str[0;1;33;93m| ¯[0;1;32;92m_[0;1;36;96m/¯[0;1;34;94m|[0;1;35;95m_[0;1;31;91m| [0;1;33;93m' [0;1;32;92m\\/ [0;1;36;96m_ [0;1;34;94m\\ [0;1;35;95m/ [0;1;31;91m-[0;1;33;93m_)[0m$lte_ver_str[0;1;32;92m|_[0;1;36;96m| [0;1;34;94m|_[0;1;35;95m| [0;1;33;93m|_[0;1;32;92m||[0;1;36;96m_\\[0;1;34;94m__[0;1;35;95m_/[0;1;31;91m_\\[0;1;33;93m__[0;1;32;92m_|[0m$ftl_ver_str ${COL_DARK_GRAY}$scr_line_str${COL_NC}"
+        echo -e "[0;1;31;91m|¯[0;1;33;93m¯[0;1;32;92m¯[0;1;32;92m(¯[0;1;36;96m)[0;1;34;94m_[0;1;35;95m|[0;1;33;93m¯[0;1;31;91m|_  [0;1;32;92m__[0;1;36;96m_|[0;1;31;91m¯[0;1;34;94m|[0;1;35;95m__[0;1;31;91m_[0m$phc_ver_str\\n[0;1;33;93m| ¯[0;1;32;92m_[0;1;36;96m/¯[0;1;34;94m|[0;1;35;95m_[0;1;31;91m| [0;1;33;93m' [0;1;32;92m\\/ [0;1;36;96m_ [0;1;34;94m\\ [0;1;35;95m/ [0;1;31;91m-[0;1;33;93m_)[0m$lte_ver_str\\n[0;1;32;92m|_[0;1;36;96m| [0;1;34;94m|_[0;1;35;95m| [0;1;33;93m|_[0;1;32;92m||[0;1;36;96m_\\[0;1;34;94m__[0;1;35;95m_/[0;1;31;91m_\\[0;1;33;93m__[0;1;32;92m_|[0m$ftl_ver_str\\n ${COL_DARK_GRAY}$scr_line_str${COL_NC}"
         fi
 
         printFunc "  Hostname: " "$sys_name" "$host_info"
@@ -520,10 +522,10 @@ chronoFunc() {
         fi
 
         # Handle exit/refresh options
-        if [[ "$*" == *"-e"* ]]; then
+        if [[ "${extra_arg}" == "exit" ]]; then
             exit 0
         else
-            if [[ "$*" == *"-r"* ]]; then
+            if [[ "${extra_arg}" == "refresh" ]]; then
                 sleep "$num"
             else
                 sleep 5
@@ -560,12 +562,10 @@ if [[ $# = 0 ]]; then
     chronoFunc
 fi
 
-for var in "$@"; do
-    case "$var" in
-        "-j" | "--json"    ) jsonFunc;;
-        "-h" | "--help"    ) helpFunc;;
-        "-r" | "--refresh" ) chronoFunc "$@";;
-        "-e" | "--exit"    ) chronoFunc "$@";;
-        *                  ) helpFunc "?";;
-    esac
-done
+case "$1" in
+    "-j" | "--json"    ) jsonFunc;;
+    "-h" | "--help"    ) helpFunc;;
+    "-r" | "--refresh" ) chronoFunc refresh "$2";;
+    "-e" | "--exit"    ) chronoFunc exit;;
+    *                  ) helpFunc "?";;
+esac
